@@ -1,0 +1,228 @@
+<?php
+
+
+/**
+ * @file
+ * Creación de Taxonomia y tipo de contenido.
+ */
+
+/**
+ * Creación de terminos de la Taxonomia.
+ */
+function salary_types() {
+  return array(
+    'Low Salary',
+    'Medium Salary',
+    'High Salary',
+  );
+}
+
+/**
+ * Creación de Taxonomia.
+ */
+function create_taxonomy() {
+  $vocabulary = new stdClass();
+  $vocabulary->name = 'Salary Types';
+  $vocabulary->machine_name = "salary_types";
+  $vocabulary->description = t('Salary Types');
+  $vocabulary->module = 'salary_types';
+
+  taxonomy_vocabulary_save($vocabulary);
+
+  $vid = taxonomy_vocabulary_machine_name_load('salary_types')->vid;
+
+  $terms = salary_types();
+  foreach ($terms as $id => $nombre) {
+    taxonomy_term_save((object) array(
+      'name' => $nombre,
+      'vid' => $vid,
+    ));
+  }
+}
+
+/**
+ * Create a content type and attach our created taxonomy to it.
+ */
+function create_content_type() {
+
+  $t = get_t();
+
+  $content_type = array(
+
+    'type'          => 'employee',
+    'name'          => $t('Employee'),
+    'description'   => $t('Create a new employee'),
+    'title_label'   => $t('Employee Name'),
+    'base'          => 'node_content',
+    'custom'        => TRUE,
+
+  );
+
+  $node_type = node_type_set_defaults($content_type);
+  node_type_save($node_type);
+
+  // Step 2 - Create new fields
+
+  $fields = array(
+
+    // Employee id
+
+    'employee_id'  => array(
+
+      'field_name' => 'employee_id',
+      'type' => 'text',
+
+    ),
+
+    // Description
+
+    'employee_age'  => array(
+
+      'field_name' => 'employee_age',
+      'type' => 'number_integer',
+
+    ),
+
+    'employee_salary'  => array(
+
+      'field_name' => 'employee_salary',
+      'type' => 'taxonomy_term_reference',
+      'settings' => array(
+        'allowed_values' => array(
+          array(
+            'vocabulary' => 'salary_types',
+          ),
+        ),
+      ),
+    ),
+  );
+
+  foreach ($fields as $field) {
+
+    field_create_field($field);
+  }
+
+  // Step 3 - Attach fields to content type
+
+  $instances = array(
+
+    // Author’s name
+
+    'employee_id'  => array(
+
+      'field_name'   => 'employee_id',
+      'entity_type' => 'node',
+      'bundle' => 'employee',
+      'label'        => $t('Employee id'),
+      'required'     => TRUE,
+
+    ),
+
+    // Description
+
+    'employee_age'  => array(
+
+      'field_name'   => 'employee_age',
+      'entity_type' => 'node',
+      'bundle' => 'employee',
+      'label'        => $t('Employee Age'),
+      'required'     => TRUE,
+
+    ),
+
+    'employee_salary'  => array(
+
+      'field_name' => 'employee_salary',
+      'entity_type' => 'node',
+      'bundle' => 'employee',
+      'label' => $t('Employee Salary'),
+      'description' => $t('Put salary of the Employee'),
+      'required' => TRUE,
+      'widget' => array(
+        'type' => 'option_select',
+      ),
+    ),
+
+  );
+
+  foreach ($instances as $instance) {
+    field_create_instance($instance);
+  }
+}
+
+/**
+ * Implements hook_install().
+ */
+function salary_types_install() {
+  create_taxonomy();
+  create_content_type();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function salary_types_uninstall() {
+  $vocabulary = taxonomy_vocabulary_machine_name_load('salary_types');
+  $terms = taxonomy_get_tree($vocabulary->vid);
+  foreach ($terms as $term) {
+    taxonomy_term_delete($term->tid);
+  }
+  taxonomy_vocabulary_delete($vocabulary->vid);
+
+  node_type_delete('employee');
+  variable_del('node_preview_employee');
+
+  // Delete fields and instances and db recorrds.
+  $fields = [
+
+    'comment_body' => array(
+      'field_name' => 'comment_body',
+      'entity_type' => 'comment',
+      'bundle' => 'comment_node_employee',
+    ),
+
+    'employee_id' => array(
+      'field_name' => 'employee_id',
+      'entity_type' => 'node',
+      'bundle' => 'employee',
+
+    ),
+
+    'employee_age' => array(
+      'field_name' => 'employee_age',
+      'entity_type' => 'node',
+      'bundle' => 'employee',
+
+    ),
+
+    'employee_salary' => array(
+      'field_name' => 'employee_salary',
+      'entity_type' => 'node',
+      'bundle' => 'employee',
+
+    ),
+
+  ];
+
+  // Hacer función que contenga los fields y luego guardarla en una variable en cada función que la necesite
+  foreach ($fields as $field) {
+
+    if ($instance = field_info_instance($field['entity_type'], $field['field_name'], $field['bundle'])) {
+
+      // field_delete_.... es para indicarle al cron que debe eliminar
+
+      // esos campos.
+
+      field_delete_instance($instance);
+
+      $enough_range_to_delete_everything = 9999999;
+
+      // Esto se usa porque los campos no seran eliminados de la db
+
+      // hasta realizar un Cron.
+
+      field_purge_batch($enough_range_to_delete_everything);
+
+    }
+  }
+}

@@ -1,0 +1,7 @@
+name = "Salary types"
+description = "Categorization of diferents types of salaries "
+core = 7.x
+version= 7.x-0.1
+
+package = Uniandes
+
